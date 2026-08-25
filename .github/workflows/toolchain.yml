@@ -91,6 +91,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.github_release) }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Verify ${{ matrix.name }} release artifacts
         env:
           TOOL_NAME: ${{ matrix.name }}
@@ -128,6 +129,26 @@ jobs:
             tar -xzf "$asset" -C "$architecture"
             test -x "$architecture/$TOOL_NAME"
           done
+      - name: Exercise the VPS Buddy installer
+        env:
+          TOOL_NAME: ${{ matrix.name }}
+          REPOSITORY: ${{ matrix.repository }}
+          REQUESTED_VERSION: ${{ matrix.version }}
+        run: |
+          integration_root=$(mktemp -d)
+          export VPB_ARCH=amd64
+          export VPB_BIN_DIR="$integration_root/bin"
+          export VPB_CACHE_HOME="$integration_root/cache"
+          export VPB_STATE_HOME="$integration_root/state"
+          export VPB_TOOL_STATE="$VPB_STATE_HOME/tools.tsv"
+          export VPB_LOCK_FILE="$VPB_STATE_HOME/versions.lock"
+          mkdir -p "$VPB_BIN_DIR" "$VPB_CACHE_HOME" "$VPB_STATE_HOME"
+          touch "$VPB_TOOL_STATE" "$VPB_LOCK_FILE"
+          source lib/ui.sh
+          source lib/state.sh
+          source lib/installers.sh
+          vpb_install_github_release_tool "$TOOL_NAME" "$REPOSITORY" "$REQUESTED_VERSION"
+          "$VPB_BIN_DIR/$TOOL_NAME" --version
 
   source-tools:
     needs: matrix
