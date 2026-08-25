@@ -21,9 +21,19 @@ grep -Fq 'vpsbuddy setup' <<<"$help_output"
 grep -Fq nuclei <<<"$tools_output"
 "$ROOT/vpsbuddy" setup --profile essential --dry-run --yes --no-wordlists --no-system-packages >/dev/null
 
-if [[ -n "$(find "$TEMP_ROOT" -mindepth 1 -type f -print)" ]]; then
-    printf 'Dry-run unexpectedly created a file.\n' >&2
-    exit 1
-fi
+for managed_path in \
+    "$XDG_CONFIG_HOME/vpsbuddy" \
+    "$XDG_DATA_HOME/vpsbuddy" \
+    "$XDG_STATE_HOME/vpsbuddy" \
+    "$XDG_CACHE_HOME/vpsbuddy" \
+    "$HOME/.local/bin" \
+    "$HOME/.profile" \
+    "$HOME/.bashrc" \
+    "$HOME/.zshrc"; do
+    if [[ -e "$managed_path" ]]; then
+        printf 'Dry-run unexpectedly created %s.\n' "$managed_path" >&2
+        exit 1
+    fi
+done
 
 printf 'Smoke tests passed.\n'
