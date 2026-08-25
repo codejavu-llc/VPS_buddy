@@ -48,7 +48,9 @@ done
 
 SOURCE_DIR=""
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
-    SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)
+    if ! SOURCE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd); then
+        SOURCE_DIR=""
+    fi
 fi
 if (( VPB_FORCE_REMOTE )) || [[ ! -f "$SOURCE_DIR/vpsbuddy" || ! -d "$SOURCE_DIR/lib" ]]; then
     command -v curl >/dev/null 2>&1 || { printf 'VPS Buddy requires curl for remote installation.\n' >&2; exit 1; }

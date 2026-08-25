@@ -13,9 +13,12 @@ export XDG_STATE_HOME="$TEMP_ROOT/state"
 export XDG_CACHE_HOME="$TEMP_ROOT/cache"
 mkdir -p "$HOME"
 
-"$ROOT/vpsbuddy" version | grep -Fx 'VPS Buddy 3.0.0'
-"$ROOT/vpsbuddy" help | grep -Fq 'vpsbuddy setup'
-"$ROOT/vpsbuddy" tools list --profile essential | grep -Fq nuclei
+version_output=$("$ROOT/vpsbuddy" version)
+help_output=$("$ROOT/vpsbuddy" help)
+tools_output=$("$ROOT/vpsbuddy" tools list --profile essential)
+grep -Fxq 'VPS Buddy 3.0.0' <<<"$version_output"
+grep -Fq 'vpsbuddy setup' <<<"$help_output"
+grep -Fq nuclei <<<"$tools_output"
 "$ROOT/vpsbuddy" setup --profile essential --dry-run --yes --no-wordlists --no-system-packages >/dev/null
 
 if [[ -n "$(find "$TEMP_ROOT" -mindepth 1 -type f -print)" ]]; then

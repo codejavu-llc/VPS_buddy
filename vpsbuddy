@@ -173,7 +173,7 @@ vpb_setup() {
 }
 
 vpb_tools_list() {
-    local filter=all profile='' details=0 displayed=0 name description profiles installer _source _version _size installed
+    local filter=all profile='' details=0 displayed=0 name description profiles installer _source _version _size installed marker
     while (($#)); do
         case "$1" in
             --installed) filter=installed; shift ;;
@@ -195,10 +195,12 @@ vpb_tools_list() {
         command -v "$name" >/dev/null 2>&1 && installed=yes
         [[ "$filter" != installed || "$installed" == yes ]] || continue
         ((displayed += 1))
+        marker=''
+        [[ "$installed" == yes ]] && marker=' [installed]'
         if (( details )); then
-            printf '%-20s %-11s %-12s %s%s\n' "$name" "$installer" "$profiles" "$description" "$([[ $installed == yes ]] && printf ' [installed]' || true)"
+            printf '%-20s %-11s %-12s %s%s\n' "$name" "$installer" "$profiles" "$description" "$marker"
         else
-            printf '%-20s %s%s\n' "$name" "$description" "$([[ $installed == yes ]] && printf ' [installed]' || true)"
+            printf '%-20s %s%s\n' "$name" "$description" "$marker"
         fi
     done <"$VPB_MANIFEST"
     if (( displayed == 0 )) && [[ "$filter" == installed ]]; then
