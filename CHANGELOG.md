@@ -18,6 +18,7 @@ VPS Buddy follows [Semantic Versioning](https://semver.org/). Dates use ISO 8601
 - Authorized engagement workspaces.
 - Local AI provider status, redaction, and analysis-brief helpers.
 - Checksummed release installer and compatibility entry point.
+- Sigstore-backed build provenance for release archives.
 - Static analysis, unit-test, cross-distribution smoke-test, upstream toolchain, and release workflows.
 
 ### Changed

@@ -134,7 +134,7 @@ vpb_install_go() {
 
 vpb_install_go_tool() {
     local name=$1 source=$2 requested=$3
-    local build_dir binary actual
+    local build_dir binary actual attempt installed=0
     if [[ "${VPB_DRY_RUN:-0}" == 1 ]]; then
         build_dir="$VPB_CACHE_HOME/build-$name"
     else
@@ -148,7 +148,16 @@ vpb_install_go_tool() {
         return
     fi
 
-    if ! env GOBIN="$build_dir" GOMAXPROCS="$VPB_BUILD_JOBS" "$VPB_GO_CMD" install "$source@$requested"; then
+    for attempt in 1 2 3; do
+        if env GOBIN="$build_dir" GOMAXPROCS="$VPB_BUILD_JOBS" "$VPB_GO_CMD" install "$source@$requested"; then
+            installed=1
+            break
+        fi
+        (( attempt < 3 )) || break
+        warn "$name download or build failed; retrying ($((attempt + 1))/3)."
+        sleep $((attempt * 2))
+    done
+    if (( installed == 0 )); then
         error "$name failed to compile."
         vpb_state_record_failure "$name" go "$requested"
         rm -f "$build_dir/$name"

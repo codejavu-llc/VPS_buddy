@@ -43,9 +43,14 @@ VPS Buddy only treats entries recorded in its state as managed. A command alread
 5. Tool versions resolved from a mutable channel are recorded in `versions.lock` for auditability.
 6. Python applications use a dedicated `pipx` home and do not modify system Python packages.
 7. Downloads and builds stage outside the final binary path.
-8. GitHub Actions dependencies are pinned to full commit hashes and maintained by Dependabot.
+8. Release archives receive a Sigstore-backed GitHub build-provenance attestation.
+9. GitHub Actions dependencies are pinned to full commit hashes and maintained by Dependabot.
 
-SHA-256 detects corruption or release-asset mismatch but is not publisher identity verification by itself. Future releases may add Sigstore attestations.
+SHA-256 detects corruption or release-asset mismatch. The additional build-provenance attestation binds the release archive digest to CodeJavu's GitHub Actions identity and can be verified with:
+
+```bash
+gh attestation verify VPS-Buddy.tar.gz --repo codejavu-llc/VPS_buddy
+```
 
 ## Failure model
 

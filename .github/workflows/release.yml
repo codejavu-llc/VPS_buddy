@@ -5,7 +5,10 @@ on:
     tags: ['v*']
 
 permissions:
+  artifact-metadata: write
+  attestations: write
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -28,6 +31,11 @@ jobs:
           gzip -n -9 VPS-Buddy.tar
           sha256sum VPS-Buddy.tar.gz > VPS-Buddy.tar.gz.sha256
 
+      - name: Attest release provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: VPS-Buddy.tar.gz
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -38,8 +46,12 @@ jobs:
 
       - name: Verify published installer and checksum
         env:
+          GH_TOKEN: ${{ github.token }}
           VPB_REF: ${{ github.ref_name }}
         run: |
           test_home=$(mktemp -d)
+          mkdir "$test_home/release"
+          gh release download "$VPB_REF" --pattern VPS-Buddy.tar.gz --dir "$test_home/release"
+          gh attestation verify "$test_home/release/VPS-Buddy.tar.gz" --repo "$GITHUB_REPOSITORY"
           HOME="$test_home" bash install.sh --remote --cli-only --ref "$VPB_REF" --prefix "$test_home/.local"
           HOME="$test_home" "$test_home/.local/bin/vpsbuddy" version
