@@ -10,7 +10,7 @@ VPS Buddy follows [Semantic Versioning](https://semver.org/). Dates use ISO 8601
 
 - Adaptive `essential`, `bug-hunter`, and `advanced` profiles.
 - Hardware, architecture, distribution, and package-manager detection.
-- Manifest-driven Go and isolated Python tool installers.
+- Manifest-driven Go, isolated Python, source-build, and verified release-artifact installers.
 - Checksum-verified, per-user Go runtime installation.
 - Tool state, resolved-version locks, private logs, repair, and JSON status.
 - Atomic binary installation and dry-run support.
@@ -18,7 +18,7 @@ VPS Buddy follows [Semantic Versioning](https://semver.org/). Dates use ISO 8601
 - Authorized engagement workspaces.
 - Local AI provider status, redaction, and analysis-brief helpers.
 - Checksummed release installer and compatibility entry point.
-- Static analysis, unit-test, smoke-test, and release workflows.
+- Static analysis, unit-test, cross-distribution smoke-test, upstream toolchain, and release workflows.
 
 ### Changed
 

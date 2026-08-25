@@ -39,9 +39,11 @@ VPS Buddy only treats entries recorded in its state as managed. A command alread
 1. The release installer downloads a release archive and its SHA-256 file before installation.
 2. The Go runtime comes from `go.dev` and is verified against the checksum in its official release metadata.
 3. Go source dependencies are authenticated by the standard Go module checksum mechanism unless a user has overridden that environment.
-4. Tool versions resolved from a mutable channel are recorded in `versions.lock` for auditability.
-5. Python applications use a dedicated `pipx` home and do not modify system Python packages.
-6. Downloads and builds stage outside the final binary path.
+4. Official tool release binaries are selected for the detected architecture and checked against the publisher's SHA-256 manifest.
+5. Tool versions resolved from a mutable channel are recorded in `versions.lock` for auditability.
+6. Python applications use a dedicated `pipx` home and do not modify system Python packages.
+7. Downloads and builds stage outside the final binary path.
+8. GitHub Actions dependencies are pinned to full commit hashes and maintained by Dependabot.
 
 SHA-256 detects corruption or release-asset mismatch but is not publisher identity verification by itself. Future releases may add Sigstore attestations.
 

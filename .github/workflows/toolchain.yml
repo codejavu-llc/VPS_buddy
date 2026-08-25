@@ -14,18 +14,21 @@ jobs:
     outputs:
       go: ${{ steps.build.outputs.go }}
       pipx: ${{ steps.build.outputs.pipx }}
+      github_release: ${{ steps.build.outputs.github_release }}
       source: ${{ steps.build.outputs.source }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: build
         name: Build validation matrices
         shell: bash
         run: |
           go_matrix=$(awk -F '|' '$1 !~ /^#/ && $4 == "go" {print $1 "\t" $5 "\t" $6}' manifests/tools.tsv | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {name: .[0], package: .[1], version: .[2]})')
           pipx_matrix=$(awk -F '|' '$1 !~ /^#/ && $4 == "pipx" {print $1 "\t" $5 "\t" $6}' manifests/tools.tsv | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {name: .[0], package: .[1], version: .[2]})')
+          github_release_matrix=$(awk -F '|' '$1 !~ /^#/ && $4 == "github-release" {print $1 "\t" $5 "\t" $6}' manifests/tools.tsv | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {name: .[0], repository: .[1], version: .[2]})')
           source_matrix=$(awk -F '|' '$1 !~ /^#/ && $4 == "source" {print $1 "\t" $5 "\t" $6}' manifests/tools.tsv | jq -Rsc 'split("\n") | map(select(length > 0) | split("\t") | {name: .[0], repository: .[1], version: .[2]})')
           echo "go=$go_matrix" >> "$GITHUB_OUTPUT"
           echo "pipx=$pipx_matrix" >> "$GITHUB_OUTPUT"
+          echo "github_release=$github_release_matrix" >> "$GITHUB_OUTPUT"
           echo "source=$source_matrix" >> "$GITHUB_OUTPUT"
 
   go-tools:
@@ -38,7 +41,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.go) }}
     steps:
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
           cache: false
@@ -59,7 +62,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.matrix.outputs.pipx) }}
     steps:
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
       - name: Install pipx
@@ -78,6 +81,53 @@ jobs:
           python -m pipx install "$specification"
       - name: Verify executable
         run: test -x "${{ runner.temp }}/bin/${{ matrix.name }}"
+
+  github-release-tools:
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.github_release) }}
+    steps:
+      - name: Verify ${{ matrix.name }} release artifacts
+        env:
+          TOOL_NAME: ${{ matrix.name }}
+          REPOSITORY: ${{ matrix.repository }}
+          REQUESTED_VERSION: ${{ matrix.version }}
+        run: |
+          if [[ "$REQUESTED_VERSION" == latest ]]; then
+            metadata=$(curl --fail --silent --show-error --location --proto '=https' "https://api.github.com/repos/$REPOSITORY/releases/latest")
+          else
+            metadata=$(curl --fail --silent --show-error --location --proto '=https' "https://api.github.com/repos/$REPOSITORY/releases/tags/$REQUESTED_VERSION")
+          fi
+          tag=$(jq -r '.tag_name // empty' <<<"$metadata")
+          test -n "$tag"
+          version=${tag#v}
+          checksum_asset="${TOOL_NAME}_${version}_checksums.txt"
+          checksum_url=$(jq -r --arg name "$checksum_asset" '.assets[] | select(.name == $name) | .browser_download_url' <<<"$metadata")
+          test -n "$checksum_url"
+          curl --fail --silent --show-error --location --proto '=https' "$checksum_url" --output "$checksum_asset"
+          for architecture in amd64 arm64; do
+            case "$architecture" in
+              amd64) release_arch=64bit ;;
+              arm64) release_arch=ARM64 ;;
+            esac
+            primary_asset="${TOOL_NAME}_${version}_linux_${architecture}.tar.gz"
+            alternate_asset="${TOOL_NAME}_${version}_Linux-${release_arch}.tar.gz"
+            asset=$(jq -r --arg primary "$primary_asset" --arg alternate "$alternate_asset" '[.assets[] | select(.name == $primary or .name == $alternate)][0].name // empty' <<<"$metadata")
+            test -n "$asset"
+            asset_url=$(jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .browser_download_url' <<<"$metadata")
+            test -n "$asset_url"
+            curl --fail --silent --show-error --location --proto '=https' "$asset_url" --output "$asset"
+            expected=$(awk -v asset="$asset" '$2 == asset {print $1; exit}' "$checksum_asset")
+            test "$expected" != ''
+            printf '%s  %s\n' "$expected" "$asset" | sha256sum --check --status
+            mkdir "$architecture"
+            tar -xzf "$asset" -C "$architecture"
+            test -x "$architecture/$TOOL_NAME"
+          done
 
   source-tools:
     needs: matrix

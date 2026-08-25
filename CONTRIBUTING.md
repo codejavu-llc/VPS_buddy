@@ -36,6 +36,8 @@ name|description|profiles|installer|source|version|estimated MB
 
 Descriptions must not contain the pipe character. Profiles are comma-separated. The manifest is executable supply-chain configuration and receives the same review care as shell code.
 
+Supported installer values are `go`, `pipx`, `source`, and `github-release`. Release artifacts must be architecture-specific and carry a publisher-provided SHA-256 manifest.
+
 ## Style
 
 - Bash code targets Bash 4.4 or newer.

@@ -194,6 +194,122 @@ vpb_install_pipx_tool() {
     success "$name $actual"
 }
 
+vpb_install_github_release_tool() {
+    local name=$1 source=$2 requested=$3
+    local metadata tag version asset primary_asset alternate_asset release_arch checksum_asset asset_url checksum_url
+    local metadata_url download_dir archive_path checksum_path expected archive_listing binary
+
+    [[ "$source" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || {
+        error "$name has an invalid GitHub repository identifier."
+        vpb_state_record_failure "$name" github-release "$requested"
+        return 1
+    }
+
+    info "Installing $name from its verified GitHub release."
+    if [[ "$requested" == latest ]]; then
+        metadata_url="https://api.github.com/repos/$source/releases/latest"
+    else
+        metadata_url="https://api.github.com/repos/$source/releases/tags/$requested"
+    fi
+    if [[ "${VPB_DRY_RUN:-0}" == 1 ]]; then
+        run curl --fail --location --proto '=https' "$metadata_url"
+        info "Would select and verify the $name release for linux/$VPB_ARCH."
+        return
+    fi
+
+    command -v jq >/dev/null 2>&1 || {
+        error "jq is required to select $name release artifacts."
+        vpb_state_record_failure "$name" github-release "$requested"
+        return 1
+    }
+    metadata=$(curl --fail --silent --show-error --location --proto '=https' "$metadata_url") || {
+        error "$name release metadata could not be downloaded."
+        vpb_state_record_failure "$name" github-release "$requested"
+        return 1
+    }
+
+    tag=$(jq -r '.tag_name // empty' <<<"$metadata")
+    [[ -n "$tag" ]] || {
+        error "$name release metadata did not contain a tag."
+        vpb_state_record_failure "$name" github-release "$requested"
+        return 1
+    }
+    version=${tag#v}
+    case "$VPB_ARCH" in
+        amd64) release_arch=64bit ;;
+        arm64) release_arch=ARM64 ;;
+        armv6l) release_arch=ARM ;;
+        386) release_arch=32bit ;;
+        *) release_arch=$VPB_ARCH ;;
+    esac
+    primary_asset="${name}_${version}_linux_${VPB_ARCH}.tar.gz"
+    alternate_asset="${name}_${version}_Linux-${release_arch}.tar.gz"
+    asset=$(jq -r --arg primary "$primary_asset" --arg alternate "$alternate_asset" \
+        '[.assets[] | select(.name == $primary or .name == $alternate)][0].name // empty' <<<"$metadata")
+    checksum_asset="${name}_${version}_checksums.txt"
+    asset_url=$(jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .browser_download_url' <<<"$metadata")
+    checksum_url=$(jq -r --arg name "$checksum_asset" '.assets[] | select(.name == $name) | .browser_download_url' <<<"$metadata")
+    [[ -n "$asset_url" && -n "$checksum_url" ]] || {
+        error "$name $tag does not provide verified linux/$VPB_ARCH artifacts."
+        vpb_state_record_failure "$name" github-release "$tag"
+        return 1
+    }
+
+    download_dir=$(mktemp -d "$VPB_CACHE_HOME/release-${name}.XXXXXX")
+    archive_path="$download_dir/$asset"
+    checksum_path="$download_dir/$checksum_asset"
+    if ! curl --fail --show-error --location --proto '=https' "$asset_url" --output "$archive_path" ||
+       ! curl --fail --show-error --location --proto '=https' "$checksum_url" --output "$checksum_path"; then
+        error "$name $tag could not be downloaded."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    fi
+    expected=$(awk -v asset="$asset" '$2 == asset {print $1; exit}' "$checksum_path")
+    if [[ ! "$expected" =~ ^[A-Fa-f0-9]{64}$ ]] ||
+       ! printf '%s  %s\n' "$expected" "$archive_path" | sha256sum --check --status; then
+        error "$name $tag checksum verification failed."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    fi
+    archive_listing=$(tar -tzf "$archive_path") || {
+        error "$name $tag archive could not be read."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    }
+    if grep -Eq '(^/|(^|/)\.\.(/|$))' <<<"$archive_listing"; then
+        error "$name $tag contains an unsafe archive path."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    fi
+    if ! tar -xzf "$archive_path" -C "$download_dir"; then
+        error "$name $tag could not be extracted."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    fi
+    binary=$(find "$download_dir" -type f -name "$name" -print -quit)
+    if [[ -z "$binary" || ! -x "$binary" ]]; then
+        error "$name $tag did not contain the expected executable."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    fi
+    if ! vpb_commit_binary "$binary" "$name"; then
+        error "$name $tag could not be committed to $VPB_BIN_DIR."
+        vpb_state_record_failure "$name" github-release "$tag"
+        rm -rf -- "$download_dir"
+        return 1
+    fi
+    rm -rf -- "$download_dir"
+    vpb_state_record "$name" github-release "$tag" ok
+    vpb_lock_record "$name" "$source" "$tag"
+    success "$name $tag"
+}
+
 vpb_install_source_tool() {
     local name=$1 source=$2 requested=$3 checkout actual
     checkout="$VPB_TOOLS_DIR/$name"
@@ -261,6 +377,7 @@ vpb_install_tool() {
     case "$installer" in
         go) vpb_install_go_tool "$name" "$source" "$version" ;;
         pipx) vpb_install_pipx_tool "$name" "$source" "$version" ;;
+        github-release) vpb_install_github_release_tool "$name" "$source" "$version" ;;
         source) vpb_install_source_tool "$name" "$source" "$version" ;;
         *) error "No installer for $name ($installer)."; return 1 ;;
     esac

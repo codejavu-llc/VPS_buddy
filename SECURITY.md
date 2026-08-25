@@ -30,4 +30,8 @@ Reports about the behavior of third-party tools installed by VPS Buddy should no
 
 ## Supported versions
 
-Until the first stable release, only the latest release and the current `main` branch receive security fixes. After stable releases begin, this file will include a formal support table.
+| Version | Supported |
+|---|---|
+| Latest 3.x release | Yes |
+| `main` | Yes |
+| 2.x and older | No |

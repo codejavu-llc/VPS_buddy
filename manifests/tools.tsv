@@ -36,7 +36,7 @@ wafw00f|Web application firewall identifier|bug-hunter,advanced|pipx|wafw00f|lat
 shuffledns|MassDNS wrapper|advanced|go|github.com/projectdiscovery/shuffledns/cmd/shuffledns|latest|60
 uncover|Search-engine API discovery|advanced|go|github.com/projectdiscovery/uncover/cmd/uncover|latest|70
 cvemap|CVE intelligence client|advanced|go|github.com/projectdiscovery/cvemap/cmd/cvemap|latest|55
-trufflehog|Verified secret discovery|advanced|go|github.com/trufflesecurity/trufflehog/v3|latest|130
+trufflehog|Verified secret discovery|advanced|github-release|trufflesecurity/trufflehog|latest|130
 gitleaks|Source-code secret scanner|advanced|go|github.com/zricethezav/gitleaks/v8|latest|95
-trivy|Repository container and cloud scanner|advanced|go|github.com/aquasecurity/trivy/cmd/trivy|latest|180
+trivy|Repository container and cloud scanner|advanced|github-release|aquasecurity/trivy|latest|180
 semgrep|Static analysis and code scanning|advanced|pipx|semgrep|latest|300
