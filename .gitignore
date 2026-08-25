@@ -1,0 +1,12 @@
+# Runtime and local developer state
+.env
+.env.*
+*.log
+*.tmp
+.vpsbuddy/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+*~

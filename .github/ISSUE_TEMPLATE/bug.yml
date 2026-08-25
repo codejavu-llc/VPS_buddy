@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible VPS Buddy problem
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include API keys, cookies, tokens, private targets, or undisclosed vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: VPS Buddy version
+      placeholder: Output of vpsbuddy version
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Environment
+      description: Paste `vpsbuddy doctor` output after reviewing it for sensitive data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and reproduction steps
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, private targets, and personal data from this report.
+          required: true
+        - label: This is not a security vulnerability in VPS Buddy.
+          required: true

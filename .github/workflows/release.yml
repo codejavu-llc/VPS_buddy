@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify tag matches the CLI version
+        run: |
+          cli_version=$(awk -F= '$1 == "VPB_VERSION" {print $2; exit}' vpsbuddy)
+          test "v$cli_version" = "$GITHUB_REF_NAME"
+
+      - name: Build deterministic release archive
+        run: |
+          git archive --format=tar --prefix=VPS-Buddy/ "$GITHUB_REF_NAME" > VPS-Buddy.tar
+          gzip -n -9 VPS-Buddy.tar
+          sha256sum VPS-Buddy.tar.gz > VPS-Buddy.tar.gz.sha256
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "VPS Buddy $GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" VPS-Buddy.tar.gz VPS-Buddy.tar.gz.sha256 --clobber
+
+      - name: Verify published installer and checksum
+        env:
+          VPB_REF: ${{ github.ref_name }}
+        run: |
+          test_home=$(mktemp -d)
+          HOME="$test_home" bash install.sh --remote --cli-only --ref "$VPB_REF" --prefix "$test_home/.local"
+          HOME="$test_home" "$test_home/.local/bin/vpsbuddy" version

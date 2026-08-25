@@ -1,0 +1,341 @@
+#!/usr/bin/env bash
+
+# Cross-module globals are intentionally assigned in the CLI.
+# shellcheck disable=SC2034
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+VPB_VERSION=3.0.0
+VPB_SCRIPT=$(readlink -f "${BASH_SOURCE[0]}")
+VPB_ROOT=$(cd "$(dirname "$VPB_SCRIPT")" && pwd)
+VPB_MANIFEST="$VPB_ROOT/manifests/tools.tsv"
+
+for library in ui config platform packages state installers content workspace doctor ai; do
+    # shellcheck source=/dev/null
+    source "$VPB_ROOT/lib/$library.sh"
+done
+
+vpb_init_paths
+vpb_read_config
+VPB_ORIGINAL_PATH=$PATH
+export PATH="$VPB_BIN_DIR:$PATH"
+
+usage() {
+    cat <<'EOF'
+VPS Buddy — your bug-hunting VPS, ready in one command
+
+Usage:
+  vpsbuddy setup           Set up this VPS automatically
+  vpsbuddy doctor          Check that everything works
+  vpsbuddy update          Update tools and wordlists
+  vpsbuddy tools           Show the tool catalog
+
+Run `vpsbuddy help advanced` for expert options.
+
+Only test systems you own or are explicitly authorized to assess.
+EOF
+}
+
+advanced_usage() {
+    cat <<'EOF'
+Advanced commands:
+  vpsbuddy setup [options]
+  vpsbuddy status [--json]
+  vpsbuddy update [TOOL] [--dry-run]
+  vpsbuddy self-update
+  vpsbuddy repair [--dry-run]
+  vpsbuddy tools [list|install|update|remove]
+  vpsbuddy workspace [new|list]
+  vpsbuddy ai [status|redact|brief]
+  vpsbuddy config
+
+Setup options:
+  -p, --profile NAME       essential, bug-hunter, advanced, or auto
+  -y, --yes                Confirm the proposed plan
+      --dry-run            Show changes without making them
+      --no-wordlists       Skip wordlists and resolver data
+      --wordlists          Enable wordlists and resolver data
+      --no-system-packages Skip OS package installation
+  -t, --tools-dir DIR      Repository and source-tool directory
+  -w, --wordlists-dir DIR  Wordlist directory
+  -b, --bin-dir DIR        Executable directory
+      --non-interactive    Never prompt (requires --yes)
+
+Full reference: https://github.com/codejavu-llc/VPS_buddy/blob/main/docs/CLI.md
+EOF
+}
+
+setup_usage() {
+    advanced_usage
+}
+
+vpb_setup() {
+    local requested_profile='' sync_content=${VPB_SAVED_CONTENT:-1} system_packages=1
+    VPB_ASSUME_YES=0
+    VPB_NON_INTERACTIVE=0
+    VPB_DRY_RUN=0
+
+    while (($#)); do
+        case "$1" in
+            -p|--profile) [[ $# -ge 2 ]] || die "$1 requires a value"; requested_profile=$2; shift 2 ;;
+            -y|--yes) VPB_ASSUME_YES=1; shift ;;
+            --non-interactive) VPB_NON_INTERACTIVE=1; shift ;;
+            --dry-run) VPB_DRY_RUN=1; shift ;;
+            --no-wordlists) sync_content=0; shift ;;
+            --wordlists) sync_content=1; shift ;;
+            --no-system-packages) system_packages=0; shift ;;
+            -t|--tools-dir) [[ $# -ge 2 ]] || die "$1 requires a directory"; VPB_TOOLS_DIR=$2; shift 2 ;;
+            -w|--wordlists-dir) [[ $# -ge 2 ]] || die "$1 requires a directory"; VPB_WORDLISTS_DIR=$2; shift 2 ;;
+            -b|--bin-dir) [[ $# -ge 2 ]] || die "$1 requires a directory"; VPB_BIN_DIR=$2; shift 2 ;;
+            -h|--help) setup_usage; return ;;
+            *) die "Unknown setup option: $1" ;;
+        esac
+    done
+
+    VPB_TOOLS_DIR=$(vpb_normalize_path "$VPB_TOOLS_DIR")
+    VPB_WORDLISTS_DIR=$(vpb_normalize_path "$VPB_WORDLISTS_DIR")
+    VPB_BIN_DIR=$(vpb_normalize_path "$VPB_BIN_DIR")
+    export PATH="$VPB_BIN_DIR:$PATH"
+
+    vpb_detect_platform
+    vpb_detect_hardware
+    vpb_require_supported_platform
+
+    if [[ -z "$requested_profile" ]]; then
+        VPB_PROFILE=${VPB_SAVED_PROFILE:-$VPB_RECOMMENDED_PROFILE}
+    elif [[ "$requested_profile" == auto ]]; then
+        VPB_PROFILE=$VPB_RECOMMENDED_PROFILE
+    else
+        VPB_PROFILE=$requested_profile
+    fi
+    vpb_profile_valid "$VPB_PROFILE" || die "Unknown profile '$VPB_PROFILE'. Choose essential, bug-hunter, advanced, or auto."
+
+    local count size_mb size_gb profile_label selection_note=''
+    count=$(vpb_profile_tool_count "$VPB_PROFILE")
+    size_mb=$(vpb_profile_size_mb "$VPB_PROFILE" "$sync_content")
+    size_gb=$(((size_mb + 1023) / 1024))
+    profile_label=$(vpb_profile_label "$VPB_PROFILE")
+    [[ -z "$requested_profile" || "$requested_profile" == auto ]] && selection_note=' (chosen automatically)'
+    if (( VPB_DISK_FREE_GB > 0 && VPB_DISK_FREE_GB < size_gb + 3 )); then
+        die "The $VPB_PROFILE profile needs about $size_gb GB plus 3 GB working space; only $VPB_DISK_FREE_GB GB is free."
+    fi
+
+    show_banner
+    section "Installation plan"
+    printf '  System       %s\n' "$(vpb_platform_summary)"
+    printf '  Setup        %s%s%s%s\n' "$VPB_BOLD" "$profile_label" "$VPB_RESET" "$selection_note"
+    printf '  Tools        %s\n' "$count"
+    printf '  Estimated    ~%s GB installed data\n' "$size_gb"
+    printf '  Binaries     %s\n' "$VPB_BIN_DIR"
+    printf '  Wordlists    %s\n' "$([[ $sync_content == 1 ]] && printf '%s' "$VPB_WORDLISTS_DIR" || printf skipped)"
+    if [[ "$VPB_PROFILE" != "$VPB_RECOMMENDED_PROFILE" ]]; then
+        warn "This machine is classified as $VPB_HARDWARE_CLASS; the recommended profile is $VPB_RECOMMENDED_PROFILE."
+    fi
+    confirm "Continue?" || die "Setup cancelled."
+
+    vpb_prepare_dirs
+    vpb_init_log
+    vpb_configure_shell_path
+    (( EUID == 0 )) && warn "Running as root installs a root-only workspace. A normal sudo-capable account is safer for daily work."
+
+    if (( system_packages )); then
+        vpb_install_system_packages
+        if ! vpb_install_profile_packages "$VPB_PROFILE"; then
+            warn "Chromium could not be installed; gowitness will need a browser configured manually."
+        fi
+    else
+        info "Skipping system packages as requested."
+    fi
+    vpb_install_go
+    vpb_install_profile_tools "$VPB_PROFILE"
+
+    VPB_CONTENT_FAILURES=0
+    VPB_SYNC_CONTENT=$sync_content
+    if (( sync_content )); then
+        vpb_sync_content "$VPB_PROFILE"
+    fi
+    vpb_save_config
+
+    section "Setup result"
+    if (( VPB_INSTALL_FAILURES == 0 && VPB_CONTENT_FAILURES == 0 )); then
+        success "VPS Buddy is ready."
+    else
+        warn "$VPB_INSTALL_FAILURES tool(s) and $VPB_CONTENT_FAILURES content item(s) failed."
+        printf '%s\n' "Run 'vpsbuddy repair' after reviewing ${VPB_LOG_FILE:-the setup output}"
+        return 2
+    fi
+    printf '\nNext steps:\n'
+    if [[ "${VPB_PATH_RELOAD_NEEDED:-0}" == 1 ]]; then
+        printf '  source ~/.profile                    # Make vpsbuddy available in this shell\n'
+    fi
+    printf '  vpsbuddy doctor\n'
+    printf '  vpsbuddy tools\n'
+}
+
+vpb_tools_list() {
+    local filter=all profile='' details=0 displayed=0 name description profiles installer _source _version _size installed
+    while (($#)); do
+        case "$1" in
+            --installed) filter=installed; shift ;;
+            --details) details=1; shift ;;
+            --profile) [[ $# -ge 2 ]] || die "--profile requires a value"; profile=$2; shift 2 ;;
+            *) die "Unknown tools list option: $1" ;;
+        esac
+    done
+    [[ -z "$profile" ]] || vpb_profile_valid "$profile" || die "Unknown profile: $profile"
+    if (( details )); then
+        printf '%-20s %-11s %-12s %s\n' TOOL INSTALLER PROFILES DESCRIPTION
+    else
+        printf '%-20s %s\n' TOOL DESCRIPTION
+    fi
+    while IFS='|' read -r name description profiles installer _source _version _size; do
+        [[ -z "$name" || "$name" == \#* ]] && continue
+        [[ -z "$profile" ]] || vpb_profile_contains "$profiles" "$profile" || continue
+        installed=no
+        command -v "$name" >/dev/null 2>&1 && installed=yes
+        [[ "$filter" != installed || "$installed" == yes ]] || continue
+        ((displayed += 1))
+        if (( details )); then
+            printf '%-20s %-11s %-12s %s%s\n' "$name" "$installer" "$profiles" "$description" "$([[ $installed == yes ]] && printf ' [installed]' || true)"
+        else
+            printf '%-20s %s%s\n' "$name" "$description" "$([[ $installed == yes ]] && printf ' [installed]' || true)"
+        fi
+    done <"$VPB_MANIFEST"
+    if (( displayed == 0 )) && [[ "$filter" == installed ]]; then
+        printf 'No installed tools found. Run: vpsbuddy setup\n'
+    fi
+}
+
+vpb_tools() {
+    if (($# == 0)); then
+        vpb_tools_list --installed
+        return
+    fi
+    local action=${1:-list}
+    (($#)) && shift
+    case "$action" in
+        list) vpb_tools_list "$@" ;;
+        install)
+            [[ $# == 1 ]] || die "Usage: vpsbuddy tools install TOOL"
+            vpb_prepare_dirs; vpb_detect_platform; vpb_detect_hardware; vpb_install_go; vpb_install_tool "$1" 0
+            ;;
+        update)
+            [[ $# == 1 ]] || die "Usage: vpsbuddy tools update TOOL"
+            vpb_prepare_dirs; vpb_detect_platform; vpb_detect_hardware; vpb_install_go; vpb_install_tool "$1" 1
+            ;;
+        remove)
+            [[ $# == 1 ]] || die "Usage: vpsbuddy tools remove TOOL"
+            vpb_prepare_dirs; vpb_remove_tool "$1"
+            ;;
+        *) die "Unknown tools command: $action" ;;
+    esac
+}
+
+vpb_update() {
+    local tool='' dry=0
+    while (($#)); do
+        case "$1" in
+            --dry-run) dry=1; shift ;;
+            -h|--help) printf 'Usage: vpsbuddy update [TOOL] [--dry-run]\n'; return ;;
+            -*) die "Unknown update option: $1" ;;
+            *) [[ -z "$tool" ]] || die "Only one tool may be specified"; tool=$1; shift ;;
+        esac
+    done
+    VPB_DRY_RUN=$dry
+    vpb_prepare_dirs
+    vpb_detect_platform
+    vpb_detect_hardware
+    vpb_init_log
+    vpb_install_go
+    vpb_update_installed_tools "$tool"
+    if [[ -z "$tool" && "${VPB_SAVED_CONTENT:-1}" == 1 ]]; then
+        vpb_sync_content "${VPB_SAVED_PROFILE:-bug-hunter}"
+    fi
+    success "Update complete."
+}
+
+vpb_repair() {
+    VPB_DRY_RUN=0
+    [[ "${1:-}" == --dry-run ]] && { VPB_DRY_RUN=1; shift; }
+    (($# == 0)) || die "Usage: vpsbuddy repair [--dry-run]"
+    local profile=${VPB_SAVED_PROFILE:-bug-hunter} failures=0 name description profiles installer _source _version _size
+    vpb_prepare_dirs
+    vpb_detect_platform
+    vpb_detect_hardware
+    vpb_init_log
+    vpb_install_go
+    while IFS='|' read -r name description profiles installer _source _version _size; do
+        [[ -z "$name" || "$name" == \#* ]] && continue
+        vpb_profile_contains "$profiles" "$profile" || continue
+        if [[ ! -x "$VPB_BIN_DIR/$name" ]] && ! command -v "$name" >/dev/null 2>&1; then
+            vpb_install_tool "$name" 1 || ((failures += 1))
+        fi
+    done <"$VPB_MANIFEST"
+    (( failures == 0 )) || { warn "$failures tool(s) could not be repaired."; return 2; }
+    success "The $profile profile is healthy."
+}
+
+vpb_workspace() {
+    local action=${1:-list}
+    (($#)) && shift
+    case "$action" in
+        new|create) [[ $# == 1 ]] || die "Usage: vpsbuddy workspace new NAME"; vpb_prepare_dirs; vpb_workspace_create "$1" ;;
+        list) (($# == 0)) || die "Usage: vpsbuddy workspace list"; vpb_workspace_list ;;
+        *) die "Unknown workspace command: $action" ;;
+    esac
+}
+
+vpb_ai() {
+    local action=${1:-status}
+    (($#)) && shift
+    case "$action" in
+        status) (($# == 0)) || die "Usage: vpsbuddy ai status"; vpb_ai_status ;;
+        redact) [[ $# -ge 1 && $# -le 2 ]] || die "Usage: vpsbuddy ai redact INPUT [OUTPUT]"; vpb_ai_redact "$@" ;;
+        brief) [[ $# == 1 ]] || die "Usage: vpsbuddy ai brief WORKSPACE"; vpb_ai_brief "$1" ;;
+        *) die "Unknown AI command: $action" ;;
+    esac
+}
+
+vpb_self_update() {
+    local prefix=$HOME/.local
+    if [[ "$VPB_ROOT" == */share/vpsbuddy/releases/* ]]; then
+        prefix=${VPB_ROOT%%/share/vpsbuddy/releases/*}
+    fi
+    "$VPB_ROOT/install.sh" --remote --cli-only --ref stable --prefix "$prefix"
+    success "VPS Buddy was updated."
+}
+
+main() {
+    local command=${1:-help}
+    (($#)) && shift
+    case "$command" in
+        setup|install) vpb_setup "$@" ;;
+        doctor)
+            (($# <= 1)) || die "Usage: vpsbuddy doctor [--json]"
+            case "${1:-}" in "") vpb_doctor 0 ;; --json) vpb_doctor 1 ;; *) die "Usage: vpsbuddy doctor [--json]" ;; esac
+            ;;
+        status)
+            (($# <= 1)) || die "Usage: vpsbuddy status [--json]"
+            case "${1:-}" in "") vpb_status_table ;; --json) vpb_status_json ;; *) die "Usage: vpsbuddy status [--json]" ;; esac
+            ;;
+        update) vpb_update "$@" ;;
+        self-update) (($# == 0)) || die "Usage: vpsbuddy self-update"; vpb_self_update ;;
+        repair) vpb_repair "$@" ;;
+        tools) vpb_tools "$@" ;;
+        new) [[ $# == 1 ]] || die "Usage: vpsbuddy new NAME"; vpb_prepare_dirs; vpb_workspace_create "$1" ;;
+        workspace) vpb_workspace "$@" ;;
+        ai) vpb_ai "$@" ;;
+        config) [[ $# == 0 || ($# == 1 && "${1:-}" == show) ]] || die "Usage: vpsbuddy config"; vpb_print_config ;;
+        version|--version|-V) printf 'VPS Buddy %s\n' "$VPB_VERSION" ;;
+        help|-h|--help)
+            case "${1:-}" in
+                "") usage ;;
+                advanced|all) advanced_usage ;;
+                *) die "Usage: vpsbuddy help [advanced]" ;;
+            esac
+            ;;
+        *) error "Unknown command: $command"; usage >&2; return 1 ;;
+    esac
+}
+
+main "$@"

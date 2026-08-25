@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Shell quality and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install static-analysis tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: Check Bash syntax
+        run: bash -n vpsbuddy install.sh VPS_buddy.sh lib/*.sh tests/*.sh
+
+      - name: Run ShellCheck
+        run: shellcheck -x vpsbuddy install.sh VPS_buddy.sh lib/*.sh tests/*.sh
+
+      - name: Validate tool manifest
+        run: bash tests/manifest.sh
+
+      - name: Run unit tests
+        run: bash tests/unit.sh
+
+      - name: Run non-installing smoke tests
+        run: bash tests/smoke.sh
+
+  platform-smoke:
+    name: Dry run on ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04
+            image: ubuntu:24.04
+            shell: bash
+          - name: Debian 12
+            image: debian:12
+            shell: bash
+          - name: Fedora
+            image: fedora:latest
+            shell: bash
+          - name: Arch Linux
+            image: archlinux:latest
+            shell: bash
+          - name: Alpine
+            image: alpine:latest
+            shell: apk add --no-cache bash coreutils grep && bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run read-only smoke test
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo:ro"
+          -w /repo
+          "${{ matrix.image }}"
+          sh -c '${{ matrix.shell }} tests/smoke.sh'

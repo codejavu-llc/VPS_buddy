@@ -1,0 +1,42 @@
+# name|description|profiles|installer|source|version|estimated MB
+nuclei|Template-driven vulnerability scanner|essential,bug-hunter,advanced|go|github.com/projectdiscovery/nuclei/v3/cmd/nuclei|latest|140
+httpx|HTTP probing and metadata toolkit|essential,bug-hunter,advanced|go|github.com/projectdiscovery/httpx/cmd/httpx|latest|90
+subfinder|Passive subdomain discovery|essential,bug-hunter,advanced|go|github.com/projectdiscovery/subfinder/v2/cmd/subfinder|latest|95
+dnsx|DNS toolkit|essential,bug-hunter,advanced|go|github.com/projectdiscovery/dnsx/cmd/dnsx|latest|75
+naabu|Fast port discovery|essential,bug-hunter,advanced|go|github.com/projectdiscovery/naabu/v2/cmd/naabu|latest|90
+ffuf|Web fuzzer|essential,bug-hunter,advanced|go|github.com/ffuf/ffuf/v2|latest|55
+anew|Unique-line stream utility|essential,bug-hunter,advanced|go|github.com/tomnomnom/anew|latest|15
+katana|Web crawler and spider|bug-hunter,advanced|go|github.com/projectdiscovery/katana/cmd/katana|latest|110
+alterx|Subdomain permutation generator|bug-hunter,advanced|go|github.com/projectdiscovery/alterx/cmd/alterx|latest|65
+tlsx|TLS data collection|bug-hunter,advanced|go|github.com/projectdiscovery/tlsx/cmd/tlsx|latest|75
+mapcidr|CIDR manipulation utility|bug-hunter,advanced|go|github.com/projectdiscovery/mapcidr/cmd/mapcidr|latest|30
+asnmap|ASN and network mapping|bug-hunter,advanced|go|github.com/projectdiscovery/asnmap/cmd/asnmap|latest|50
+cdncheck|CDN identification utility|bug-hunter,advanced|go|github.com/projectdiscovery/cdncheck/cmd/cdncheck|latest|30
+notify|Finding notification utility|bug-hunter,advanced|go|github.com/projectdiscovery/notify/cmd/notify|latest|55
+interactsh-client|Out-of-band interaction client|bug-hunter,advanced|go|github.com/projectdiscovery/interactsh/cmd/interactsh-client|latest|70
+waybackurls|Wayback Machine URL collector|bug-hunter,advanced|go|github.com/tomnomnom/waybackurls|latest|15
+assetfinder|Passive domain asset finder|bug-hunter,advanced|go|github.com/tomnomnom/assetfinder|latest|20
+unfurl|URL parser and extractor|bug-hunter,advanced|go|github.com/tomnomnom/unfurl|latest|15
+qsreplace|Query-string replacement utility|bug-hunter,advanced|go|github.com/tomnomnom/qsreplace|latest|15
+gf|Pattern-based output filtering|bug-hunter,advanced|go|github.com/tomnomnom/gf|latest|15
+dalfox|XSS analysis tool|bug-hunter,advanced|go|github.com/hahwul/dalfox/v2|latest|55
+gau|Known URL collector|bug-hunter,advanced|go|github.com/lc/gau/v2/cmd/gau|latest|45
+subjs|JavaScript URL collector|bug-hunter,advanced|go|github.com/lc/subjs|latest|25
+jsluice|JavaScript endpoint and secret analyzer|bug-hunter,advanced|go|github.com/BishopFox/jsluice/cmd/jsluice|latest|45
+gowitness|Browser screenshot utility|bug-hunter,advanced|go|github.com/sensepost/gowitness|latest|90
+puredns|Fast DNS resolver and bruteforcer|bug-hunter,advanced|go|github.com/d3mondev/puredns/v2|latest|40
+massdns|High-performance DNS stub resolver|bug-hunter,advanced|source|https://github.com/blechschmidt/massdns.git|master|25
+hakrawler|Fast endpoint crawler|bug-hunter,advanced|go|github.com/hakluke/hakrawler|latest|35
+gospider|Web spider|bug-hunter,advanced|go|github.com/jaeles-project/gospider|latest|40
+arjun|HTTP parameter discovery|bug-hunter,advanced|pipx|arjun|latest|45
+dirsearch|Web path discovery|bug-hunter,advanced|pipx|dirsearch|latest|60
+dnsgen|DNS permutation generator|bug-hunter,advanced|pipx|dnsgen|latest|30
+sqlmap|SQL injection validation toolkit|bug-hunter,advanced|pipx|sqlmap|latest|65
+wafw00f|Web application firewall identifier|bug-hunter,advanced|pipx|wafw00f|latest|35
+shuffledns|MassDNS wrapper|advanced|go|github.com/projectdiscovery/shuffledns/cmd/shuffledns|latest|60
+uncover|Search-engine API discovery|advanced|go|github.com/projectdiscovery/uncover/cmd/uncover|latest|70
+cvemap|CVE intelligence client|advanced|go|github.com/projectdiscovery/cvemap/cmd/cvemap|latest|55
+trufflehog|Verified secret discovery|advanced|go|github.com/trufflesecurity/trufflehog/v3|latest|130
+gitleaks|Source-code secret scanner|advanced|go|github.com/zricethezav/gitleaks/v8|latest|95
+trivy|Repository container and cloud scanner|advanced|go|github.com/aquasecurity/trivy/cmd/trivy|latest|180
+semgrep|Static analysis and code scanning|advanced|pipx|semgrep|latest|300
